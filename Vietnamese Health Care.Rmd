@@ -1,0 +1,185 @@
+---
+title: "Vietnamese Health"
+author: "Chiyu Ma"
+date: "4/30/2020"
+output: html_document
+---
+
+
+```{r}
+data = read.csv("vietnam-health-cleaned.csv")
+#data[,c(2,15,16,18:21)]=as.factor(data[,c(2,15,16,18:21)])
+data.sub = data[,c(-1,-10,-18:-21)]
+data.quality = data[,-1:-10]
+#summary(data)
+
+```
+
+```{r,fig.width=4, fig.height=3, fig.cap="figure 1: plot of key demographic variables"}
+par(mfrow=c(1,3))
+hist(data$HadExam,col = "skyblue",main = "check-up ",xlab = "1=yes, 0=no")
+plot(data$Jobstt,col = "skyblue",main="job status",xlab="job status")
+plot(data$HealthIns,col="skyblue",main="health insurance",xlab="health insurance")
+```
+
+```{r,fig.width=6, fig.height=4, fig.cap="figure 2: plot of quality of medical services variables"}
+par(mfrow=c(2,4))
+#hist(data$HadExam,col = "skyblue",main = "whether check-ups",xlab = "1=yes, 0=no")
+plot(data.sub$Wsttime,col = "skyblue",main = "waste of time")
+plot(data.sub$Wstmon,col = "skyblue",main = "waste of money")
+plot(data.sub$Lessbelqual,col = "skyblue",main = "little faith in quality")
+plot(data.sub$NotImp,col = "skyblue",main = "whether important")
+hist(data.sub$Tangibles,col = "skyblue",main = "perceived quality",xlab = "scale")
+hist(data.sub$Empathy,col = "skyblue",main = "rate on staffs",xlab = "scale")
+plot(data.sub$SuitFreq,col = "skyblue",main = "suitable frequency",xlab = "scale")
+```
+
+```{r,fig.width=6, fig.height=4, fig.cap="figure 4: bivariate plot for reesponse variable and key predictors"}
+par(mfrow=c(2,3))
+barplot(table(data$HadExam,data$Jobstt),xlab = "grey = yes; blue = no",col = c("skyblue","grey"), main ="had exam vs job status")
+barplot(table(data$HadExam,data$HealthIns),xlab = "grey = yes; blue = no",col = c("skyblue","grey"),main = "had exam vs insurance")
+barplot(table(data$HadExam,data$Wsttime),xlab = "grey = yes; blue = no",col = c("skyblue","grey"),main = "had exam vs waste time")
+barplot(table(data$HadExam,data$NotImp),xlab = "grey = yes; blue = no",col = c("skyblue","grey"),main = "had exam vs important")
+barplot(table(data$HadExam,data$SuitFreq),xlab = "grey = yes; blue = no",col = c("skyblue","grey"),main = "had exam vs suitable freq")
+barplot(table(data$HadExam,data$AttractInfo),xlab = "grey = yes; blue = no",col = c("skyblue","grey"),main = "had exam vs AttractInfo")
+
+```
+
+
+
+```{r,fig.width=6, fig.height=4, fig.cap="figure 3: plot of quality of information variables"}
+
+par(mfrow=c(2,3))
+hist(data.quality$SuffInfo,col = "skyblue",main = "info. sufficiency",xlab = "scale")
+hist(data.quality$AttractInfo,col = "skyblue",main = "info.attractiveness",xlab = "scale")
+hist(data.quality$ImpressInfo,col = "skyblue",main = "info.impressiveness",xlab = "scale")
+hist(data.quality$PopularInfo,col = "skyblue",main = "info.popularity",xlab = "scale")
+```
+
+
+```{r}
+data[,2]= as.factor(data[,2])
+data.sub$HadExam = as.factor(data.sub$HadExam)
+#data[,15] = as.factor(data[,15])
+#data[,16] = as.factor(data[,16])
+#data[,18] = as.factor(data[,18])
+#data[,19] = as.factor(data[,19])
+#data[,20] = as.factor(data[,20])
+#data[,11] = as.factor(data[,21])
+#data.sub = data[,c(-1,-10,-18:-21)]
+
+model1 = glm(HadExam~.,data = data.sub,family = "binomial")
+model2 = step(model1,trace = 0)
+model3 = glm(HadExam~SuffInfo:HealthIns+AttractInfo:HealthIns+PopularInfo:HealthIns+Jobstt+Wsttime+NotImp+SuitFreq+ImpressInfo:HealthIns+SuffInfo+AttractInfo+PopularInfo+ImpressInfo+HealthIns,family = "binomial",data=data)
+```
+
+```{r}
+
+1-pchisq(model3$deviance, df=2048)# goodness of fit 
+
+```
+
+
+```{r,fig.width=6, fig.height=4, fig.cap="figure 5:caliberation plot for model 3"}
+library("np")
+library('FNN')
+model.kernel = npreg(data$HadExam~fitted(model3),bws = 0.075)
+
+smoothspline = smooth.spline(data$HadExam~fitted(model3),df=20)
+
+kn = knn.reg(y=data$HadExam,train=fitted(model3),k=35)
+
+plot(fitted(model3),fitted(model.kernel),pch=16,cex=0.8,main = "model3",ylab = "fitted smoother")
+points(fitted(model3),fitted(smoothspline),col="pink",pch= 15,cex=0.8)
+points(fitted(model3),kn$pred,col="skyblue",pch=18,cex=0.8)
+legend("topleft",pch=c(16,15,18), col=c("black","pink","skyblue"),legend = c("kernel","spline","35 nearest neighbor"))
+abline(a=0,b=1,col="red")
+
+```
+
+
+
+
+```{r}
+model3b = glm(HadExam~SuffInfo+AttractInfo+PopularInfo+Jobstt+Wsttime+NotImp+SuitFreq+ImpressInfo+HealthIns,family = "binomial",data=data)
+
+anova(model3b,model3,test = "Chisq")# deviance test on reduced model 
+
+```
+
+```{r}
+data.pred = data.frame(Jobstt = "other",Wsttime="yes",NotImp = "yes",SuitFreq = "6m",SuffInfo =5,AttractInfo = 5, ImpressInfo =5,PopularInfo =5,HealthIns="yes")
+data.pred1 = data.frame(Jobstt = "other",Wsttime="yes",NotImp = "yes",SuitFreq = "6m",SuffInfo =1,AttractInfo = 1, ImpressInfo =1,PopularInfo =1,HealthIns="yes")
+
+pred5 = predict(model3b, newdata = data.pred, type = "link")
+pred1 = predict(model3b, newdata = data.pred1, type = "link")
+
+diff = rep(pred5 - pred1,4)
+exp(diff[1])
+diff1 = rep(4,4)
+
+var = t(diff1)%*%vcov(model3b)[c(2,3,4,15),c(2,3,4,15)]%*%diff1
+se = sqrt(var)
+z = qnorm(0.975)
+exp(c(diff[1]-z*se, diff[1]+z*se))
+
+
+```
+
+```{r}
+
+diff= sum(coef(model3b)[c(2,3,4,15)]*(5-1))
+exp(diff)
+
+ diff1 = coef(model3b)[c(2,3,4,15)]*(5-1)
+
+diff1 = rep(4,4)
+
+var = t(diff1)%*%vcov(model3b)[c(2,3,4,15),c(2,3,4,15)]%*%diff1
+se = sqrt(var)
+z = qnorm(0.975)
+exp(c(diff-z*se, diff+z*se))
+
+```
+
+```{r}
+model2b = glm(HadExam~ HealthIns+ Jobstt+ Wsttime+ NotImp+SuitFreq,data = data,family = "binomial")
+summary(model2b)
+
+```
+
+
+```{r}
+library("purrr")
+p=(fitted(model3))
+
+B = 1000
+dev = vector()
+for (b in 1:B){
+  set.seed(b)
+  data$yi = as.integer(rbernoulli(n=2068,p))
+  model3t = glm(yi~SuffInfo:HealthIns+AttractInfo:HealthIns+PopularInfo:HealthIns+Jobstt+Wsttime+NotImp+SuitFreq+ImpressInfo:HealthIns+SuffInfo+AttractInfo+PopularInfo+ImpressInfo+HealthIns,family = "binomial",data=data)
+  model3.rt  =  glm(yi~SuffInfo+AttractInfo+PopularInfo+Jobstt+Wsttime+NotImp+SuitFreq+ImpressInfo+HealthIns,family = "binomial",data=data)
+
+  testb = anova(model3.rt,model3t,test = "Chisq")
+  dev[b]= testb$Deviance[2]
+  
+}
+
+test = anova(model3b,model3,test = "Chisq")
+pvalue = sum(dev>= test$Deviance[2])/B
+pvalue# boostrapping test on deviance 
+```
+
+```{r,fig.width=6, fig.height=4, fig.cap="figure 6:histogram of deviance"}
+
+x= rchisq(B,df=4)
+hist(dev,freq = FALSE,breaks = 30,ylim = c(0,max(dchisq(x,df=4))),main = "histogram of deviance")
+abline(v=test$Deviance[2],col="red")
+curve(dchisq(x,df=4),ylab = "density",add = TRUE)
+lines(density(dev),col="skyblue",lwd=2)
+legend("topright",legend = c("theoretical","boostrapping","observed"),fill = c("black","skyblue","red"))
+
+```
+
+
